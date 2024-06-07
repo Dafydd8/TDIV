@@ -3,17 +3,6 @@ from socket import *
 import time
 import sys 
 
-#Esta función se usa para limpiar los "'" de registros ns y cname obtenidos
-def limpiar(s:str):
-  '''
-  Devuelve s pero sin el caracter "'"
-  '''
-  res = ""
-  for i in s:
-    if i != "'":
-      res += i
-  return res
-
 def query_A(source:str, ip_server:str, intentos:int):
   '''
   Realiza una query tipo A a ip_server usando source como hostname y devuelve la DNS response obtenida.
@@ -34,7 +23,6 @@ def query_A(source:str, ip_server:str, intentos:int):
     try:
       #intentamos obtener rta
       data, addr = connectionSocket.recvfrom(512)
-      #print("Respuesta recibida desde", addr)
     
       connectionSocket.close() #cerramos socket
 
@@ -79,6 +67,7 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
   '''
   intentos:int = 3 #Máximo de 3 intentos por nivel de jerarquía
   response = query_A(source, ip_server, intentos) #Realizar query A y obtener respuesta
+
   #Si sobrepasamos cantidad máxima de intentos, abortamos.
   if response is None: 
     return None
@@ -96,7 +85,8 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
       ips.append(reg.rdata)
       eraAutoritativo = True
     elif reg.type == 5: # si es Tipo CNAME
-      regs_cname.append(limpiar(str(reg.rdata))[1:])
+      regs_cname.append(reg.rdata.decode())
+      #regs_cname.append(limpiar(str(reg.rdata))[1:])
 
   #Analizamos seccion additional records y guardamos los reistros A recibidos
   for i in range(response.arcount):
@@ -108,7 +98,7 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
   for i in range(response.nscount):
     reg = response.ns[i]
     if reg.type == 2:
-      regs_ns.append(limpiar(str(reg.rdata))[1:])
+      regs_ns.append(reg.rdata.decode())
   
   conseguiIPs:bool = len(ips) != 0
   IPsRepetidas:bool = ip_server in ips #Esto chequea que no nos hayan devuelto las mismas IPs que teníamos desde la consulta anterior
@@ -140,14 +130,16 @@ def get_ip_from_dom(dom:str, root_ip:str):
   eraAutoritativo:bool = False
   ips_server:list[str] = [root_ip]
   i:int = 0
-  while(not eraAutoritativo and i < len(ips_server)): #Iteramos mientras no hayamos conseguido IPs de server autorit. y queden IPs por consultar
-    ips_obtenidas:list[str] = []
-    while len(ips_obtenidas) == 0 and i < len(ips_server): #Iteramos mientras no hayamos obtenido IPs y queden IPs por consultar.
-      ips_obtenidas, eraAutoritativo = get_next_ips(dom, ips_server[i], root_ip)
-      if ips_obtenidas is None:
-        return None
-      i+=1
-      if len(ips_obtenidas) != 0: #Si obtuvimos IPs en la query actual, sobreescribimos ips_server para utilizarlas en prox iteración.
-        i = 0
-        ips_server = ips_obtenidas
+  ips_obtenidas:list[str] = []
+  while(not eraAutoritativo and i < len(ips_server) and len(ips_obtenidas) == 0): #Iteramos mientras no hayamos conseguido IPs, las obtenidas no sean autoritativas de server autorit. y queden IPs por consultar
+    #while len(ips_obtenidas) == 0 and i < len(ips_server): #Iteramos mientras no hayamos obtenido IPs y queden IPs por consultar.
+    ips_obtenidas, eraAutoritativo = get_next_ips(dom, ips_server[i], root_ip)
+    if ips_obtenidas is None:
+      return None
+    i+=1
+    if len(ips_obtenidas) != 0: #Si obtuvimos IPs en la query actual, sobreescribimos ips_server para utilizarlas en prox iteración.
+      i = 0
+      ips_server = ips_obtenidas
+      if not eraAutoritativo:
+        ips_obtenidas = []
   return ips_obtenidas
