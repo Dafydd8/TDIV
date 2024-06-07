@@ -37,27 +37,15 @@ def query_A(source:str, ip_server:str, intentos:int):
       connectionSocket.close() #cerramos socket
       query_A(source, ip_server, intentos - 1)
 
-#Esta función toma una lista de registros CNAME y busca las IPs asociadas a ellos.
-def resolver_cname(cnames, server_ip):
+#Esta función toma una lista de registros NS o CNAME e intenta buscar las IPs asociadas a los mismos.
+def resolver_ns_cname(regs, server_ip):
   '''
-  Intenta obtener IPs autoritativas para al menos un registro CNAME en cnames.
-  '''
-  i:int = 0
-  ips_conseguidas:list[str] = []
-  while (i < len(cnames) and len(ips_conseguidas) == 0):
-    ips_conseguidas = get_ip_from_dom(cnames[i], server_ip)
-    i = i + 1
-  return ips_conseguidas
-
-#Esta función toma una lista de registros NS e intenta buscar las IPs asociadas a los mismos.
-def resolver_ns(regs_ns, server_ip):
-  '''
-  Intenta obtener IPs autoritativas para al menos un registro CNAME en cnames.
+  Intenta obtener IPs autoritativas para al menos un registro en regs.
   '''
   i = 0
   ips_conseguidas = []
-  while (i < len(regs_ns) and len(ips_conseguidas) == 0):
-    ips_conseguidas = get_ip_from_dom(regs_ns[i], server_ip)
+  while (i < len(regs) and len(ips_conseguidas) == 0):
+    ips_conseguidas = get_ip_from_dom(regs[i], server_ip)
     i = i + 1
   return ips_conseguidas
 
@@ -106,7 +94,7 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
   if not conseguiIPs or IPsRepetidas:
     #ESTE BLOQUE TRATA DE CONSEGUIR IPS DESDE CNAMES 
     if len(regs_cname) != 0:
-      ips_conseguidas_desde_cname = resolver_cname(regs_cname, root_ip)
+      ips_conseguidas_desde_cname = resolver_ns_cname(regs_cname, root_ip)
       if ips_conseguidas_desde_cname is None:
         return None
       if len(ips_conseguidas_desde_cname) != 0:
@@ -115,7 +103,7 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
 
     #ESTE BLOQUE TRATA DE CONSEGUIR IPS DESDE NS
     if  len(ips) == 0 and response.nscount != 0:
-      ips_conseguidas_desde_ns = resolver_ns(regs_ns, root_ip)
+      ips_conseguidas_desde_ns = resolver_ns_cname(regs_ns, root_ip)
       if ips_conseguidas_desde_ns is None:
         return None
       if len(ips_conseguidas_desde_ns) != 0:
