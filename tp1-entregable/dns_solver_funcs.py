@@ -31,8 +31,8 @@ def query_A(source:str, ip_server:str, intentos:int):
       return response
       
     except ConnectionResetError:
-      #Si no se obtuvo respuesta, esperamos un segundo y reintentamos decrementando la cantidad de intentos restantes.
-      print("No hubo respuesta. Reintentando...")
+      #Si hubo una excepción, esperamos un segundo y reintentamos decrementando la cantidad de intentos restantes.
+      print("Ocurrió un error. Reintentando...")
       time.sleep(1)
       connectionSocket.close() #cerramos socket
       query_A(source, ip_server, intentos - 1)
@@ -74,7 +74,6 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
       eraAutoritativo = True
     elif reg.type == 5: # si es Tipo CNAME
       regs_cname.append(reg.rdata.decode())
-      #regs_cname.append(limpiar(str(reg.rdata))[1:])
 
   #Analizamos seccion additional records y guardamos los reistros A recibidos
   for i in range(response.arcount):
