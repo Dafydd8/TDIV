@@ -12,6 +12,7 @@ def query_A(source:str, ip_server:str, intentos:int):
   else:
     #creamos socket
     connectionSocket = socket(AF_INET, SOCK_DGRAM)
+    connectionSocket.settimeout(1)
 
     #armamos y enviamos paquete (como bytes)
     pck = scapy.DNS(rd = 0, qd = scapy.DNSQR( qname = source, qtype = "A"))
@@ -23,19 +24,18 @@ def query_A(source:str, ip_server:str, intentos:int):
     try:
       #intentamos obtener rta
       data, addr = connectionSocket.recvfrom(512)
-    
+      response = scapy.DNS(data)
+
       connectionSocket.close() #cerramos socket
 
-      #convertimos los bytes recibidos en un paquete de scapy para analizarlo más fácil
-      response = scapy.DNS(data)
       return response
-      
-    except ConnectionResetError:
+            
+    except:
       #Si hubo un error de conexión, esperamos un segundo y reintentamos decrementando la cantidad de intentos restantes.
-      print("Ocurrió un error. Reintentando...")
+      print("No se pudo conectar al server. Reintentando...")
       time.sleep(1)
       connectionSocket.close() #cerramos socket
-      query_A(source, ip_server, intentos - 1)
+      return query_A(source, ip_server, intentos - 1)
 
 #Esta función toma una lista de registros NS o CNAME e intenta buscar las IPs asociadas a los mismos.
 def resolver_ns_cname(regs, server_ip):
@@ -47,6 +47,8 @@ def resolver_ns_cname(regs, server_ip):
   while (i < len(regs) and len(ips_conseguidas) == 0):
     ips_conseguidas = get_ip_from_dom(regs[i], server_ip)
     i = i + 1
+    if ips_conseguidas is None:
+      break
   return ips_conseguidas
 
 def get_next_ips(source:str, ip_server:str, root_ip:str):
@@ -56,15 +58,15 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
   intentos:int = 3 #Máximo de 3 intentos por nivel de jerarquía
   response = query_A(source, ip_server, intentos) #Realizar query A y obtener respuesta
 
-  #Si sobrepasamos cantidad máxima de intentos, abortamos.
-  if response is None: 
-    return None
+  eraAutoritativo:bool = False #Solamente habremos encontrado servers autoritativos cuando hayan regs A en sección answer
+  #Si sobrepasamos cantidad máxima de intentos o hubo timeout en el envío o recepeción del paquete, abortamos.
+  if response is None:
+    return None, eraAutoritativo
 
   ips:list[str] = []
   regs_cname:list[str] = []
   regs_ns:list[str] = []
 
-  eraAutoritativo:bool = False #Solamente habremos encontrado servers autoritativos cuando hayan regs A en sección answer
 
   #Analizamos seccion answer y guardamos los reistros A y CNAME recibidos
   for i in range(response.ancount):
@@ -95,7 +97,7 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
     if len(regs_cname) != 0:
       ips_conseguidas_desde_cname = resolver_ns_cname(regs_cname, root_ip)
       if ips_conseguidas_desde_cname is None:
-        return None
+        return None, eraAutoritativo
       if len(ips_conseguidas_desde_cname) != 0:
         ips = ips_conseguidas_desde_cname
         eraAutoritativo = True #Resuelta la IP final desde el CNAME, garantizamos haber encontrado IPs de los autoritativos.
@@ -104,7 +106,7 @@ def get_next_ips(source:str, ip_server:str, root_ip:str):
     if  len(ips) == 0 and response.nscount != 0:
       ips_conseguidas_desde_ns = resolver_ns_cname(regs_ns, root_ip)
       if ips_conseguidas_desde_ns is None:
-        return None
+        return None, eraAutoritativo
       if len(ips_conseguidas_desde_ns) != 0:
         ips = ips_conseguidas_desde_ns
 
