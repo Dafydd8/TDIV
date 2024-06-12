@@ -31,7 +31,7 @@ def query_A(source:str, ip_server:str, intentos:int):
       return response
       
     except ConnectionResetError:
-      #Si hubo una excepción, esperamos un segundo y reintentamos decrementando la cantidad de intentos restantes.
+      #Si hubo un error de conexión, esperamos un segundo y reintentamos decrementando la cantidad de intentos restantes.
       print("Ocurrió un error. Reintentando...")
       time.sleep(1)
       connectionSocket.close() #cerramos socket
